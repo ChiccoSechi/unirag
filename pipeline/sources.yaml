@@ -1,0 +1,168 @@
+# What the crawler may read and what not. Website checked: October 2026.
+# Pages are found ONLY by following the course menu: the crawler never guesses URLs or IDs.
+# Texts in quotes ('...') are matched against the website, so they stay in Italian.
+
+course: crs_60_73   # Master's degree in Computer Science
+host: web.unica.it
+
+# Page whose menu (#menup) lists the course pages
+start_page: https://web.unica.it/unica/it/crs_60_73.page
+
+# Menu pages kept: Italian only, course pages only
+page_prefix: https://web.unica.it/unica/it/crs_60_73
+
+# Course pages not in the menu but linked from its pages (chosen by hand)
+extra_pages:
+  - https://web.unica.it/unica/it/crs_60_73_prossima_att.page   # linked from "Insegnamenti"
+
+# Pages of which only one block is kept (the one opened by this `h1`–`h6` title): the rest of the
+# content, and the documents linked there, are dropped. If the title disappears, extraction reports it.
+kept_sections:
+  # "Altre attività formative": only recent, upcoming and ongoing events, not past ones
+  https://web.unica.it/unica/it/crs_60_73_27.page: 'Eventi Recenti, Prossimi o in Corso'
+
+# Pages whose list of linked contents at the bottom (`div.article-list`) is kept and followed: the
+# web.unica.it pages linked there are read as external pages (except the notices of the run, which
+# stay notices). Chosen by hand only: on professors' pages the same element lists people.
+linked_contents:
+  - https://web.unica.it/unica/it/crs_60_73_27.page   # short courses and projects of "Altre attività formative"
+
+# Menu pages not read as normal pages (the notices list is read separately)
+excluded_pages:
+  - https://web.unica.it/unica/it/crs_60_73_5.page
+  # Second menu address of "Percorso formativo" (same content and PDFs as crs_60_73_percorso_formativo):
+  # read twice, it doubled the page and its next page in the sources
+  - https://web.unica.it/unica/it/crs_60_73_22.page
+  # Rooms and facilities of the Faculty: lesson rooms come from the timetable; these pages list the
+  # rooms and labs of the whole Faculty and confuse the answers (the Faculty's "Sede" is in
+  # Monserrato, Computer Science lessons are not)
+  - https://web.unica.it/unica/it/crs_60_73_aule.page
+  - https://web.unica.it/unica/it/crs_60_73_aule_inf.page
+  - https://web.unica.it/unica/it/crs_60_73_laboratori.page
+  - https://web.unica.it/unica/it/crs_60_73_sede.page
+  - https://web.unica.it/unica/it/crs_60_73_sale_studio.page
+
+# The course's notices list, with its pages
+notices: https://web.unica.it/unica/it/crs_60_73_5.page
+
+# Documents of academic years starting before this one are dropped (only the two running cohorts).
+# `auto` = computed from the date (`pipeline/sources.py`, `automatic_min_year`): in October 2026 it
+# is 2025 (2025/26 and 2026/27), from September 2027 it is 2026. For an exception, write the year
+# (e.g. `min_year: 2025`). Documents of years after the current one are dropped too (`max_year`,
+# also from the date): a 2027/28 regulation published in June is downloaded from September, when it
+# becomes a running cohort. The year is read from the link text ("2025/2026", "A.A. 26/27"); a link
+# without a year takes the one of the previous link on the same page (e.g. "Matrice di Tuning"
+# after its regulation).
+min_year: auto
+
+# Documents excluded by link text (regular expressions, case-insensitive)
+excluded_documents:
+  - '^Matrice di Tuning'      # learning outcomes × subjects: not useful, 24-column table
+  - '^Regolamento didattico del CdS$'   # linked from the Exams page: it belongs to Chemistry
+
+# Notices whose text is kept but not their attachments (regular expressions on the title):
+# graduation session calendars contain graduands' names and thesis titles
+notices_without_attachments:
+  - 'calendario.*laure'
+
+# Documents of which only the most recent years are kept (by link text): a new year pushes out the
+# oldest one by itself
+latest_years_documents:
+  - {link_text: '^Regolamento didattico \d', years: 2}
+
+# Documents with one version per cohort (title): parts identical in the two cohorts are stored once,
+# in the most recent year's document, with a link to the other (`pipeline/cohorts.py`, table `copies`
+# in D1). Not the study plan: its tables change from one year to the next.
+merged_cohort_documents:
+  - '^Regolamento didattico \d'
+
+# Documents: only if linked from the content of the course pages
+documents:
+  extensions: [".pdf"]
+  paths: ["/unica/protected/"]
+
+# --- Checks in the code (before robots.txt) ---
+# With protego the longest rule wins: `Allow: /unica/it/crs_60_73` would override
+# `Disallow: /*?`. That is why queries and forbidden words are checked in the code.
+
+# No URLs with parameters, except the pagination of the course pages' lists
+# (notices, professors, regulations…: "?frame1_item=N"). Regular expressions on the whole URL.
+allowed_queries:
+  - '^https://web\.unica\.it/unica/it/crs_60_73[a-z0-9_]*\.page\?frame1_item=\d+$'
+# Next pages read at most for each list split into pages
+max_list_pages: 30
+
+# Words looked for in the URL path (not in titles: "ricerca" or "form" would block
+# "informatica" and legitimate notices). The internal search is already excluded by the query rule.
+forbidden_words: [login, logout, password, register, /admin, /search, ricerca.page, cerca.page]
+
+# Linked sites that are excluded
+excluded_sites:
+  - unica.esse3.cineca.it          # Esse3: robots.txt with Disallow: /
+  - easystaff.it                   # timetables: robots.txt with Disallow: /
+  - www.unica.it                   # university portal: outside the scope of the course
+  - unica.it
+
+# --- External pages chosen by hand (outside the course: portal and faculty) ---
+# Only these, nothing else of the portal: no subpages or documents. The robots.txt of www.unica.it
+# applies; if a page redirects to another address of the same site, only that one is followed.
+external_pages:
+  # The old www.unica.it/unica/it/….page addresses redirect to web.unica.it: used directly
+  - https://web.unica.it/unica/it/fac_scienze_acc__corsi_mag.page                  # admission to the Master's
+
+# PDFs of the external pages chosen by hand (the other PDFs of those pages are not taken).
+# No rankings: they contain initials, dates of birth and scores of the candidates.
+external_documents:
+  - url: https://web.unica.it/unica/protected/542706/0/def/ref/GNC280220/
+    page: https://web.unica.it/unica/it/fac_scienze_acc__corsi_mag.page
+    link_text: DR bando selezione LM Informatica aa 2026_2027.pdf
+  - url: https://web.unica.it/unica/protected/545813/0/def/ref/GNC280220/
+    page: https://web.unica.it/unica/it/fac_scienze_acc__corsi_mag.page
+    link_text: RIAPERTURA TERMINI- INFORMATICA LM.pdf
+
+# --- Cineca course catalogue (subject sheets) ---
+# No robots.txt (it answers with the JavaScript app). The app reads its data from a JSON service:
+# only these three addresses are used, with the parameters given by the catalogue itself, starting
+# from the official links of the course's "Insegnamenti" page. Only the current offer year.
+catalogue:
+  host: unica.coursecatalogue.cineca.it
+  courses_page: https://web.unica.it/unica/it/crs_60_73_21.page
+  allowed_paths: [/api/v1/corso/, /api/v1/corso-offerta/, /api/v1/insegnamento]
+  # Only the subjects taught in the current year; of the previous year's sheet only the texts are
+  # taken, and only if the current one is "in via di definizione" (pipeline/catalogue.py).
+
+# --- Local robots.txt ---
+# web.unica.it has no robots.txt (HTTP 404, checked again on 8 October 2026). This one takes its
+# place, modelled on the one of www.unica.it (no search, accounts, administration) and limited to
+# the course. At every run the site's one is read too, if it ever appears: the strictest wins.
+local_robots: |
+  User-agent: *
+  Disallow: /unica/en/
+  Disallow: /unica/it/crs_60_73_segn_sug
+  Disallow: /unica/it/crs_60_73_verbali_consiglio   # council minutes: names and internal decisions
+  Disallow: /unica/it/crs_60_73_opinioni_laureati   # reports on graduates' opinions
+  Disallow: /unica/it/crs_60_73_condizio           # the same AlmaLaurea reports, excluded
+  Disallow: /unica/it/crs_60_73_ordinamento_di     # degree structures: the regulation is enough
+  Disallow: /unica/it/crs_60_73_29.page            # Mobility/Erasmus: out of scope
+  # "Qualità e miglioramento" section (quality assurance, monitoring, reviews, opinions): out of scope
+  Disallow: /unica/it/crs_60_73_30.page
+  Disallow: /unica/it/crs_60_73_31.page
+  Disallow: /unica/it/crs_60_73_32.page
+  Disallow: /unica/it/crs_60_73_39.page
+  Disallow: /unica/it/crs_60_73_40.page
+  Disallow: /unica/it/crs_60_73_48.page
+  Disallow: /unica/it/crs_60_73_53.page
+  Disallow: /unica/it/crs_60_73_56.page
+  Allow: /unica/it/crs_60_73
+  Allow: /unica/page/it/
+  Allow: /unica/protected/
+  Disallow: /
+
+# --- Limits of each run ---
+# reduced: development (CRAWLER_FULL=0), few requests and the local copy in cache/
+# full: GitHub Actions (CRAWLER_FULL=1). null = no limit.
+# max_requests: safety belt against code errors that would make the crawler run forever.
+# errors_in_a_row: many failed requests in a row (timeouts, 5xx) = the site has problems: stop.
+limits:
+  reduced:  {pages: 8,    documents: 3,    notices: 3,  courses: 3,    max_requests: 25,  errors_in_a_row: 5}
+  full:     {pages: null, documents: null, notices: 20, courses: null, max_requests: 400, errors_in_a_row: 5}
