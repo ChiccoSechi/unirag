@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 
 import pdfplumber
 
+from core.config import details
+
 # (cell box or None if covered by a merged cell, text, x centre of the text)
 Cell = tuple[tuple[float, float, float, float] | None, str, float]
 
@@ -177,6 +179,32 @@ def _assign(row: list[Cell], columns: list[Column]) -> list[str | None]:
     return values
 
 
+def _orphans(words: list[dict], cells: list, bands: list, columns: list[Column]) -> list[list[str]]:
+    """Per row and column, the text that no detected cell holds: a merged cell whose top border
+    is on the previous page is not a cell for pdfplumber, but its text is still there."""
+
+    def centre(w: dict) -> tuple[float, float]:
+        return (w["x0"] + w["x1"]) / 2, (w["top"] + w["bottom"]) / 2
+
+    free = [
+        w for w in words
+        if not any(c[0] <= centre(w)[0] <= c[2] and c[1] <= centre(w)[1] <= c[3] for c in cells)
+    ]  # fmt: skip
+    return [
+        [
+            text(
+                " ".join(
+                    w["text"]
+                    for w in free
+                    if b[1] <= centre(w)[1] <= b[3] and col.x0 <= centre(w)[0] <= col.x1
+                )
+            )  # fmt: skip
+            for col in columns
+        ]
+        for b in bands
+    ]
+
+
 COURSE_YEAR = re.compile(r"\b\d°\s*ANNO\b.*", re.I)
 # "INDIRIZZO CLOUD AND SECURITY" (from 2024/25) or "Percorso CLOUD AND SECURITY" (2023/24): name in
 # capitals, so that it does not match sentences of the text ("del percorso “Cloud and Security”")
@@ -208,20 +236,39 @@ def _build(
     columns: list[Column],
     rows: list[list[Cell]],
     row_texts: list[str],
+    orphans: list[list[str]],
     pdf_text: str,
+    previous: Table | None = None,
 ) -> Table:
+    """`previous`: the table this one continues, from the page before. A merged cell cut by the
+    page break goes on in this table's first row: its value is the one above (from `previous`),
+    joined with the text found below the break; `previous`'s rows get the joined value too."""
     data: list[list[str]] = []
-    for row, row_text in zip(rows, row_texts, strict=True):
+    for row, row_text, free in zip(rows, row_texts, orphans, strict=True):
         if _title_row(row):
             update_context(context, text(row_text), free_title=True)
             continue
-        values = _assign(row, columns)
+        values = [
+            f if v is None and f else v for v, f in zip(_assign(row, columns), free, strict=True)
+        ]
         if not any(values):
             continue
         # Leftover of a merged cell (a single cell, the rest covered from above): not a row
         if data and sum(v is None for v in values) > len(values) / 2:
             continue
-        above = data[-1] if data else [""] * len(columns)
+        if not data and previous and previous.rows:
+            last = previous.rows[-1]
+            for i, f in enumerate(free):
+                if f and values[i] == f and last[i]:  # the text goes on from the page before
+                    before, joined = last[i], f"{last[i]} {f}"
+                    for r in reversed(previous.rows):
+                        if r[i] != before:
+                            break
+                        r[i] = joined
+                    values[i] = joined
+            above = previous.rows[-1]
+        else:
+            above = data[-1] if data else [""] * len(columns)
         data.append([above[i] if v is None else v for i, v in enumerate(values)])
     return Table(number, context.description(), [c.name for c in columns], data, pdf_text)
 
@@ -235,6 +282,7 @@ def read_tables(
     result: list[Table] = []
     context = Context()
     previous: list[Column] | None = None
+    open_table: Table | None = None  # the last table read: the next page may continue it
     with pdfplumber.open(io.BytesIO(content)) as pdf:
         for number, page in enumerate(pdf.pages, start=1):
             above = 0.0
@@ -253,7 +301,7 @@ def read_tables(
                 found = _header(rows)
                 columns = _normalise(found[0], format) if found else []
                 if found and format.recognises([c.name for c in columns]):
-                    n = found[1]
+                    n, open_table = found[1], None
                 elif previous:  # continues the previous table
                     columns, n = previous, 0
                 else:
@@ -262,8 +310,13 @@ def read_tables(
                 if n == len(rows):  # only the header at the bottom of the page: data comes next
                     continue
                 row_texts = [_zone_text(page, b[1], b[3]) for b in bands[n:]]
+                cells = [c for r in table.rows for c in r.cells if c is not None]
+                orphans = _orphans(words, cells, bands[n:], columns)
                 pdf_text = _zone_text(page, start, table.bbox[3])
-                result.append(_build(number, context, columns, rows[n:], row_texts, pdf_text))
+                open_table = _build(
+                    number, context, columns, rows[n:], row_texts, orphans, pdf_text, open_table
+                )
+                result.append(open_table)
     return result
 
 
@@ -293,12 +346,18 @@ def lost_values(t: Table) -> list[str]:
     return sorted({v for v in MEANINGFUL.findall(t.pdf_text) if _compact(v) not in got})
 
 
+def _mask(value: str) -> str:
+    """A value for the log: numbers with 6 digits or more (phone numbers, IDs) hidden."""
+    return "[number]" if sum(c.isdigit() for c in value) >= 6 else value
+
+
 def check(tables: list[Table], row_check: Callable[[dict[str, str]], str | None]) -> None:
     """Common check (lost values, rows present) plus the document's own, row by row."""
     for t in tables:
         t.problems = []
         if lost := lost_values(t):
-            t.problems.append(f"PDF values lost: {len(lost)}")  # how many, never the PDF text
+            shown = f": {', '.join(map(_mask, lost))}" if details() else ""
+            t.problems.append(f"{len(lost)} values of the PDF missing from the table read{shown}")
         if not t.rows:
             t.problems.append("no rows")
         for n, fields in enumerate(t.fields(), start=1):

@@ -496,7 +496,7 @@ def _pdf_tables(content: bytes, link_text: str, name: str) -> tuple[list[dict], 
     tables, problems = [], []
     for t in module.read(content):
         if not t.valid:
-            problems.append(f"table on page {t.pdf_page} to check: {t.problems[0]}")
+            problems.append(f"table on page {t.pdf_page}: {'; '.join(t.problems)}")
             continue
         tables.append({
             "pdf_page": t.pdf_page,

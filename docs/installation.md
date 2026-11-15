@@ -115,7 +115,10 @@ Before any download, set in `.env` who the crawler is (see [Crawler](crawler.md)
 - `CRAWLER_NAME`: the name in the User-Agent (default `UniRAG-inf-copy`; keep the `UniRAG-inf` prefix,
   so that the `robots.txt` rule in [Crawler](crawler.md) stops your copy too);
 - `CRAWLER_INFO_URL` (optional): a page that explains your crawler, for example your copy of
-  [Crawler](crawler.md).
+  [Crawler](crawler.md);
+- `PIPELINE_DETAILS` (optional): `1` to see in the errors of the run the values that explain them,
+  for example the words that a PDF table lost. Keep it empty where the logs are public (GitHub
+  Actions in a public repository): those values are texts from the university's website.
 
 ## 4. First run, from your computer
 
