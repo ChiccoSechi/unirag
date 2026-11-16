@@ -1,0 +1,35 @@
+{
+	// Telegram bot of UniRAG-inf, in TypeScript. Copy this file to wrangler.jsonc (ignored by git) and put
+	// your D1 database ID in it: `npx wrangler d1 list` shows it (docs/installation.md)
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "unirag-inf",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-08",
+
+	// Workers AI, Vectorize and D1 through bindings: no keys in the Worker
+	"ai": { "binding": "AI" },
+	"vectorize": [{ "binding": "VECTORIZE", "index_name": "unirag-inf" }],
+	// The bot only reads (whole tables, source titles, notices); only the pipeline writes
+	"d1_databases": [
+		{ "binding": "DB", "database_name": "unirag-inf", "database_id": "YOUR-D1-DATABASE-ID" }
+	],
+
+	// Configuration (not secret). Secrets are saved with `npx wrangler secret put`:
+	// TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
+	"vars": {
+		"CF_EMBED_MODEL": "@cf/baai/bge-m3",
+		"CF_LLM_MODEL": "@cf/google/gemma-4-26b-a4b-it"
+	},
+
+	// No user data: Workers Logs disabled
+	"observability": {
+		"enabled": false,
+		"logs": { "enabled": false, "invocation_logs": false }
+	},
+
+	// No public preview URLs for versions
+	"preview_urls": false,
+
+	// No Wrangler telemetry
+	"send_metrics": false
+}

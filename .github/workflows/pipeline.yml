@@ -1,0 +1,64 @@
+# Weekly pipeline: website crawler → extraction and chunks → Vectorize → D1 (pipeline/run.py).
+# On Sunday at 03:00 Italian summer time (01:00 UTC; 02:00 in winter), or by hand from
+# Actions → pipeline → Run workflow.
+#
+# - If the run fails (crawler stopped, extraction problems, too many missing sources, Cloudflare
+#   errors) GitHub emails "workflow failed". In the log only URLs, counts and error
+#   types: never page texts nor secrets (core/ and pipeline/ print nothing else).
+# - On GitHub there is no local copy between runs: it starts from an empty `cache/` and downloads
+#   everything again. No Actions cache nor artifacts: not allowed for UniCa's content.
+# - Secrets only in the `pipeline` Environment (usable only from the main branch), never in the code.
+# - `concurrency`: only one writing run at a time (same group for every workflow writing to
+#   Vectorize and D1); the second one waits, it is not cancelled.
+name: pipeline
+
+on:
+  schedule:
+    - cron: "0 1 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: pipeline
+    timeout-minutes: 60
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+      CRAWLER_CONTACT: ${{ secrets.CRAWLER_CONTACT }}
+      CRAWLER_NAME: ${{ vars.CRAWLER_NAME }}
+      CRAWLER_INFO_URL: ${{ vars.CRAWLER_INFO_URL }}
+      CRAWLER_FULL: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.14"
+      - run: uv sync --locked --no-dev
+      - name: Empty local copy
+        # Always start from scratch: if the crawler stopped before writing the summary, the run
+        # must not index old files.
+        run: rm -rf cache && mkdir cache
+      - name: Crawler
+        # A stopped crawler (429, 503, maintenance) still writes `summary.json` with `stopped`:
+        # the next step reads it, records the error in D1 and makes the run fail.
+        id: crawler
+        continue-on-error: true
+        run: uv run python -m pipeline.crawl
+      - name: Vectorize and D1
+        run: uv run python -m pipeline.run
+      - name: Crawler outcome
+        if: steps.crawler.outcome == 'failure'
+        run: |
+          echo "::error::crawler stopped or failed: see the Crawler step"
+          exit 1
