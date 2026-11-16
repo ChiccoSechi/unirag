@@ -1,0 +1,44 @@
+[project]
+name = "unirag-inf"
+version = "0.0.0"
+description = "Unofficial RAG on the Master's degree in Computer Science of the University of Cagliari, with a Telegram bot"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "httpx>=0.28.1",
+    "markdownify>=1.2.3",
+    "pdfplumber>=0.11.10",
+    "protego>=0.7.0",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Packages importable by the tools
+packages = ["core", "pipeline", "rag_local"]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "ruff",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+# T20: no print (rule on users' data)
+select = ["E", "F", "W", "I", "UP", "B", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+# Terminal tools may print; core/, pipeline/ and rag_local/rag.py may not (rule on users' data)
+"setup/**" = ["T20"]
+"rag_local/ask.py" = ["T20"]
